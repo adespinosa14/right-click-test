@@ -42,7 +42,19 @@ nav
   cursor: pointer;
 }
 
+.buttons_center
+{
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+}
+
 .btn:hover
 {
   background-color: #1558b0;
+}
+
+.red_text
+{
+  color: red;
 }
