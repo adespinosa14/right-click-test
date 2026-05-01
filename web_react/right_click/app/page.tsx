@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import "./globals.css";
 import customers from "../data/customers.json";
-import { getQuickEstimate, getFullSystemEstimate, type Estimate } from "./estimator";
+import { getEstimates, type Estimate } from "./estimator";
 
 type Customer = typeof customers[number];
 
@@ -140,8 +140,7 @@ function EstimateRow({ estimate, isOpen, onToggle }: { estimate: Estimate; isOpe
 
 function CustomerProfile({ customer }: { customer: Customer }) {
   const [openBreakdown, setOpenBreakdown] = useState<string | null>(null);
-  const quickEstimate = getQuickEstimate(customer);
-  const fullEstimate = getFullSystemEstimate(customer);
+  const estimates = getEstimates(customer);
 
   function toggleBreakdown(label: string) {
     setOpenBreakdown(prev => prev === label ? null : label);
@@ -185,18 +184,16 @@ function CustomerProfile({ customer }: { customer: Customer }) {
         {/* Estimates card */}
         <div style={{ background: "#f5f7ff", border: "1px solid #e0e7ff", borderRadius: "8px", padding: "0.875rem 1rem" }}>
           <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#6678b1", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 0.25rem 0" }}>
-            Repair Estimates
+            Installation Estimates
           </p>
-          <EstimateRow
-            estimate={quickEstimate}
-            isOpen={openBreakdown === quickEstimate.label}
-            onToggle={() => toggleBreakdown(quickEstimate.label)}
-          />
-          <EstimateRow
-            estimate={fullEstimate}
-            isOpen={openBreakdown === fullEstimate.label}
-            onToggle={() => toggleBreakdown(fullEstimate.label)}
-          />
+          {estimates.map((estimate) => (
+            <EstimateRow
+              key={estimate.label}
+              estimate={estimate}
+              isOpen={openBreakdown === estimate.label}
+              onToggle={() => toggleBreakdown(estimate.label)}
+            />
+          ))}
         </div>
       </div>
     </div>

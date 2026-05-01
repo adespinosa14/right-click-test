@@ -15,7 +15,3 @@ bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-## My Approach
-
-I created two versions, a console only and then this, a frontend version. Here, I decided to keep the scope pretty small only including what I needed, which was just a button.

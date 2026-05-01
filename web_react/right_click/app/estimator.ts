@@ -6,13 +6,79 @@ export type Customer = typeof customers[number];
 export type LineItem = { description: string; cost: number };
 export type Estimate = { label: string; total: number; items: LineItem[] };
 
-type EquipmentItem = typeof equipmentData[number];
-type LaborRate = typeof laborData[number];
+type EquipmentItem = (typeof equipmentData)[number];
+type LaborRate = (typeof laborData)[number];
 
-function getEquipmentCost(item: EquipmentItem): number {
+function getBaseCost(item: EquipmentItem): number {
   if ("baseCost" in item) return (item as { baseCost: number }).baseCost;
   if ("base_cost" in item) return (item as { base_cost: number }).base_cost;
   return 0;
+}
+
+function categoryParser(systemType: string): string[] {
+  const tokens = systemType.replace(/ \+ /g, ",").replace(/ - /g, ",").split(",");
+  const categories: string[] = [];
+
+  for (const token of tokens) {
+    if (token.includes("Air Conditioner") || token.includes("AC")) {
+      categories.push("Air Conditioner");
+    } else if (token.includes("Heat Pump")) {
+      categories.push("Heat Pump");
+    } else if (token.includes("Furnace")) {
+      categories.push("Furnace");
+    } else if (token.includes("Mini-Split")) {
+      categories.push("Mini-Split");
+    } else if (token.includes("Air Handler")) {
+      categories.push("Air Handler");
+    } else if (token.includes("Rooftop Unit") || token.includes("Rooftop")) {
+      categories.push("Rooftop Unit");
+    } else if (token.includes("Package Unit") || token.includes("Package")) {
+      categories.push("Package Unit");
+    } else if (token.includes("Compressor")) {
+      categories.push("Compressor");
+    } else if (token.includes("Motor")) {
+      categories.push("Motor");
+    } else if (token.includes("Coil")) {
+      categories.push("Coil");
+    } else if (token.includes("Thermostat")) {
+      categories.push("Thermostat");
+    } else if (token.includes("Capacitor")) {
+      categories.push("Capacitor");
+    } else if (token.includes("Gas Valve")) {
+      categories.push("Gas Valve");
+    } else if (token.includes("Control Board")) {
+      categories.push("Control Board");
+    } else if (token.includes("Ignitor")) {
+      categories.push("Ignitor");
+    } else if (token.includes("Humidifier")) {
+      categories.push("Humidifier");
+    } else if (token.includes("Air Cleaner")) {
+      categories.push("Air Cleaner");
+    } else if (token.includes("Air Purifier")) {
+      categories.push("Air Purifier");
+    }
+  }
+
+  return categories;
+}
+
+function getEquipmentBuckets(categories: string[]): Record<string, EquipmentItem[]> {
+  const buckets: Record<string, EquipmentItem[]> = {};
+  for (const cat of categories) {
+    buckets[cat] = [];
+  }
+  for (const item of equipmentData) {
+    if (item.category in buckets) {
+      buckets[item.category].push(item as EquipmentItem);
+    }
+  }
+  return buckets;
+}
+
+function getTier(bucket: EquipmentItem[]): [EquipmentItem, EquipmentItem, EquipmentItem] {
+  const sorted = [...bucket].sort((a, b) => getBaseCost(a) - getBaseCost(b));
+  const n = sorted.length;
+  return [sorted[0], sorted[Math.floor(n / 2)], sorted[n - 1]];
 }
 
 function getLaborRate(jobType: string, level: string): LaborRate | undefined {
@@ -24,122 +90,53 @@ function laborCost(rate: LaborRate): number {
   return Math.round(rate.hourlyRate * hours);
 }
 
-function getAgeTierPart(systemAge: number, systemType: string): EquipmentItem {
-  const hasFurnace = systemType.toLowerCase().includes("furnace");
-  let id: string;
-
-  if (systemAge <= 7) {
-    id = hasFurnace ? "EQ023" : "EQ018";
-  } else if (systemAge <= 15) {
-    id = hasFurnace ? "EQ022" : "EQ012";
-  } else {
-    id = "EQ011";
-  }
-
-  return equipmentData.find((e) => e.id === id)!;
-}
-
-type ParsedSystem = {
-  equipmentIds: string[];
-  multiplier: number;
-  hasMiniSplit: boolean;
-  hasRooftop: boolean;
-};
-
-function parseSystemType(systemType: string): ParsedSystem {
-  const lower = systemType.toLowerCase();
-  const multiplierMatch = systemType.match(/\(x(\d+)\)/);
-  const multiplier = multiplierMatch ? parseInt(multiplierMatch[1], 10) : 1;
-
-  const equipmentIds: string[] = [];
-  const hasMiniSplit = lower.includes("mini-split");
-  const hasRooftop = lower.includes("rooftop");
-
-  if (lower.includes("central ac")) equipmentIds.push("EQ001");
-  if (lower.includes("furnace")) equipmentIds.push("EQ003");
-  if (lower.includes("heat pump")) equipmentIds.push("EQ002");
-  if (hasRooftop) equipmentIds.push("EQ007");
-  if (lower.includes("package")) equipmentIds.push("EQ008");
-  if (hasMiniSplit) {
-    // (x2) or higher with no other systems → multi-zone unit; otherwise single
-    const useMultiZone = !lower.includes("dual zone") && multiplier > 1;
-    equipmentIds.push(useMultiZone ? "EQ006" : "EQ005");
-  }
-
-  return { equipmentIds, multiplier, hasMiniSplit, hasRooftop };
-}
-
-export function getQuickEstimate(customer: Customer): Estimate {
-  const age = customer.systemAge ?? 0;
-  const systemType = customer.systemType ?? "";
-
-  const diagRate = getLaborRate("diagnostic", "standard")!;
-  const repairRate = getLaborRate("repair", "minor")!;
-  const part = getAgeTierPart(age, systemType);
-
-  const diagCost = laborCost(diagRate);
-  const repairCost = laborCost(repairRate);
-  const partCost = getEquipmentCost(part);
-
-  const items: LineItem[] = [
-    {
-      description: `Diagnostic labor (${diagRate.estimatedHours.min}–${diagRate.estimatedHours.max} hrs @ $${diagRate.hourlyRate}/hr)`,
-      cost: diagCost,
-    },
-    {
-      description: `Repair labor (${repairRate.estimatedHours.min}–${repairRate.estimatedHours.max} hrs @ $${repairRate.hourlyRate}/hr)`,
-      cost: repairCost,
-    },
-    { description: part.name, cost: partCost },
-  ];
-
-  return {
-    label: "Quick & Simple",
-    total: items.reduce((sum, i) => sum + i.cost, 0),
-    items,
-  };
-}
-
-export function getFullSystemEstimate(customer: Customer): Estimate {
+export function getEstimates(customer: Customer): [Estimate, Estimate, Estimate] {
   const systemType = customer.systemType ?? "";
   const propertyType =
     ("propertyType" in customer ? customer.propertyType : null) ??
     ("property_type" in customer ? (customer as { property_type?: string }).property_type : null) ??
     "residential";
 
-  const parsed = parseSystemType(systemType);
-  const thermostat = equipmentData.find((e) => e.id === "EQ016")!;
+  const categories = categoryParser(systemType);
+  const buckets = getEquipmentBuckets(categories);
 
-  const items: LineItem[] = [];
-
-  for (const eqId of parsed.equipmentIds) {
-    const eq = equipmentData.find((e) => e.id === eqId)!;
-    const unitCost = getEquipmentCost(eq);
-    const qty = parsed.hasRooftop && eqId === "EQ007" ? parsed.multiplier : 1;
-    const label = qty > 1 ? `${eq.name} ×${qty}` : eq.name;
-    items.push({ description: label, cost: unitCost * qty });
-  }
-
-  items.push({ description: thermostat.name, cost: getEquipmentCost(thermostat) });
-
-  let installRate: LaborRate | undefined;
-  if (parsed.hasMiniSplit && parsed.equipmentIds.length === 1) {
-    installRate = getLaborRate("install", "mini-split");
+  // Pick labor rate based on property type and system
+  let laborRate: LaborRate | undefined;
+  if (categories.includes("Mini-Split") && propertyType !== "commercial") {
+    laborRate = getLaborRate("install", "mini-split");
   } else if (propertyType === "commercial") {
-    installRate = getLaborRate("install", "commercial");
+    laborRate = getLaborRate("install", "commercial");
   } else {
-    installRate = getLaborRate("install", "residential");
+    laborRate = getLaborRate("install", "residential");
   }
 
-  const install = installRate ?? getLaborRate("install", "residential")!;
-  items.push({
-    description: `Installation labor (${install.estimatedHours.min}–${install.estimatedHours.max} hrs @ $${install.hourlyRate}/hr)`,
-    cost: laborCost(install),
-  });
-
-  return {
-    label: "Full System Replacement",
-    total: items.reduce((sum, i) => sum + i.cost, 0),
-    items,
+  const labor = laborRate ?? getLaborRate("install", "residential")!;
+  const laborTotal = laborCost(labor);
+  const laborLine: LineItem = {
+    description: `Labor (${labor.jobType} / ${labor.level})`,
+    cost: laborTotal,
   };
+
+  // Build Budget / Mid / Premium tiers across all categories
+  const tierItems: [LineItem[], LineItem[], LineItem[]] = [[], [], []];
+  const tierTotals = [0, 0, 0];
+
+  for (const cat of Object.keys(buckets)) {
+    const bucket = buckets[cat];
+    if (!bucket.length) continue;
+    const [low, mid, high] = getTier(bucket);
+    for (const [i, item] of ([low, mid, high] as EquipmentItem[]).entries()) {
+      const cost = getBaseCost(item);
+      tierItems[i].push({ description: `${item.category}: ${item.name}`, cost });
+      tierTotals[i] += cost;
+    }
+  }
+
+  const tierNames = ["Budget", "Mid", "Premium"] as const;
+
+  return tierNames.map((label, i) => ({
+    label,
+    total: tierTotals[i] + laborTotal,
+    items: [...tierItems[i], laborLine],
+  })) as [Estimate, Estimate, Estimate];
 }
