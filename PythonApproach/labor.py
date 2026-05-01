@@ -1,13 +1,11 @@
 import json
-def Labor():
+
+def Labor(job_type, level):
     with open("data/labor_rates.json", "r") as file:
         labor_data = json.load(file)
 
-        for labor in labor_data:
-            job_type = labor.get('jobType', 'N/A')
-            level = labor.get('level', 'N/A')
-            hourly = labor.get('hourlyRate', 'N/A')
-            hours = labor.get('estimatedHours', 'N/A')
+    for labor in labor_data:
+        if labor.get('jobType') == job_type and labor.get('level') == level:
+            return labor
 
-            print(f'\nJob: {job_type}\nLevel: {level}\nHourly: ${hourly}/hr\nTime: {hours} hours\n')
-            print('\n-------------------------------------------------------------------------------------------')
+    return None
